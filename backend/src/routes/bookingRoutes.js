@@ -52,6 +52,35 @@ router.post('/', requireAuth, validate(bookingSchema), async (req, res) => {
     const checkin = new Date(checkinDate);
     const checkoutDate = addDays(checkin, noOfNights);
 
+    // Room count validation
+    const overlappingBookings = await Booking.find({
+      roomId,
+      checkinDate: { $lt: checkoutDate },
+      checkoutDate: { $gt: checkin }
+    });
+
+    let isAvailable = true;
+    for (let i = 0; i < noOfNights; i++) {
+      const currentDate = addDays(checkin, i);
+      let countForDate = 0;
+      for (const b of overlappingBookings) {
+        const bCheckin = new Date(b.checkinDate);
+        const bCheckout = new Date(b.checkoutDate);
+        // Check if currentDate is within the booking dates (inclusive of checkin, exclusive of checkout)
+        if (currentDate >= bCheckin && currentDate < bCheckout) {
+          countForDate++;
+        }
+      }
+      if (countForDate >= room.noOfRooms) {
+        isAvailable = false;
+        break;
+      }
+    }
+
+    if (!isAvailable) {
+      return res.status(400).json({ error: 'Room is fully booked for the selected dates' });
+    }
+
     const booking = await Booking.create({
       roomId,
       propertyId: property._id,
